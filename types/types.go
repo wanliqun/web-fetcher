@@ -1,6 +1,7 @@
 package types
 
 import (
+	"io"
 	"time"
 )
 
@@ -14,4 +15,13 @@ type Metadata struct {
 	LastFetchedAt *time.Time
 	// FetchedAt: The current time the HTML page was fetched.
 	FetchedAt *time.Time
+}
+
+// EmbeddedAsset represents an embedded asset within an HTML page.
+type EmbeddedAsset struct {
+	// URLPath: The original URL path of the asset.
+	URLPath string
+	// DataReader: The io.ReadCloser interface provides methods to read and close
+	// the asset's data.
+	DataReader io.ReadCloser
 }

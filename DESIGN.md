@@ -74,17 +74,20 @@ func (p *Parser) ReplaceURLs(t URLTransformer) error {...}
 type FileStore struct {
 	// Base directory for storing scraped data. 
 	rootDir string  
-	// Document name for generating file or folder names.
+	// Document base name for generating file or folder names.
 	docName string
 }
 
-// SaveHTMLDoc saves the HTML document object to `${rootDir}/${docName}.html`.  
+// SaveHTMLDoc saves HTML document object.
 func (fs *FileStore) SaveHTMLDoc(doc *goquery.Document) error {...}
 
-// SaveMetadata saves the parsed metadata to `${rootDir}/${docName}_meta.json`.  
+// SaveMetadata saves parsed metadata.  
 func (fs *FileStore) SaveMetadata(meta *Metadata) error {...}
 
-// SaveAsset saves the asset file to `${rootDir}/${docName}_assets/${assetFileName}`.  
+// LoadMetadata loads metadata from json file.
+func (fs *FileStore) LoadMetadata(docName string) (*types.Metadata, error) {...}
+
+// SaveAsset saves embeded asset file.
 func (fs *FileStore) SaveAsset(as *EmbeddedAsset) error {...}
 ```
 ### Auxillary Types
