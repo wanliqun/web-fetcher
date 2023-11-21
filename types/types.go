@@ -13,7 +13,7 @@ type Metadata struct {
 	// NumImages: The total number of images found within the HTML page.
 	NumImages int
 	// LastFetchedAt: The last time the HTML page was fetched.
-	LastFetchedAt time.Time
+	LastFetchedAt *time.Time
 	// FetchedAt: The current time the HTML page was fetched.
 	FetchedAt time.Time
 }
@@ -29,8 +29,12 @@ type EmbeddedAsset struct {
 
 // FetchResult represents the outcome of fetching an HTML page.
 type FetchResult struct {
+	// Web page URL
+	URL string
 	// Metadata extracted from the HTML page.
 	Metadata *Metadata
 	// HTTP response received from the fetch request.
 	Response *http.Response
+	// Fetch error if any.
+	Err error
 }

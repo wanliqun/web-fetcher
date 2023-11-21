@@ -2,12 +2,9 @@ package store
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/kennygrant/sanitize"
@@ -15,34 +12,37 @@ import (
 	"github.com/wanliqun/web-fetcher/types"
 )
 
+var (
+	defaultFileStoreRootDir = "."
+)
+
+func init() {
+	curDir, err := os.Getwd()
+	if err != nil {
+		panic("failed to get current directory")
+	}
+
+	defaultFileStoreRootDir = curDir
+}
+
 // FileStore manages the storage of scraped HTML documents, downloaded asset
 // files, and parsed metadata in a designated directory.
 type FileStore struct {
 	// Base directory for storing scraped data.
 	rootDir string
-	// Document base name for generating file or folder names.
+	// Document base name for generating file or folder.
 	docName string
 }
 
-func NewFileStore(docURL *url.URL) (*FileStore, error) {
-	rootDir, err := os.Getwd()
-	if err != nil {
-		return nil, errors.WithMessage(err, "failed to get current directory")
-	}
-
-	docName := docURL.Host + docURL.Path
-	if len(docURL.RawQuery) > 0 {
-		docName += "?" + docURL.RawQuery
-	}
-
+func NewFileStore(docName string) (*FileStore, error) {
 	return &FileStore{
-		rootDir: rootDir,
-		docName: SanitizeFileName(docName),
+		rootDir: defaultFileStoreRootDir,
+		docName: sanitize.BaseName(docName),
 	}, nil
 }
 
-// SaveHTMLDoc saves HTML document object.
-func (fs *FileStore) SaveHTMLDoc(doc *goquery.Document) error {
+// SaveDoc saves HTML document object.
+func (fs *FileStore) SaveDoc(doc *goquery.Document) error {
 	content, err := doc.Html()
 	if err != nil {
 		return errors.WithMessage(err, "invalid HTML document")
@@ -51,7 +51,7 @@ func (fs *FileStore) SaveHTMLDoc(doc *goquery.Document) error {
 	return os.WriteFile(fs.htmlDocPath(), []byte(content), 0644)
 }
 
-// HTML doc file path: `${rootDir}/${docName}.html`.
+// HTML document file format: `${rootDir}/${docName}.html`.
 func (fs *FileStore) htmlDocPath() string {
 	return filepath.Join(fs.rootDir, fs.docName+".html")
 }
@@ -69,11 +69,11 @@ func (fs *FileStore) SaveMetadata(metadata *types.Metadata) error {
 // LoadMetadata loads metadata from json file.
 func (fs *FileStore) LoadMetadata() (*types.Metadata, error) {
 	data, err := os.ReadFile(fs.metadataFilePath())
-	if err != nil {
-		if os.IsNotExist(err) { // file not found
-			return nil, nil
-		}
+	if os.IsNotExist(err) { // file not found
+		return nil, nil
+	}
 
+	if err != nil {
 		return nil, errors.WithMessage(err, "failed to read file")
 	}
 
@@ -105,24 +105,8 @@ func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {
 	return nil
 }
 
-// Asset file path format:  `${rootDir}/${docName}/${assetFileName}`.
+// Asset file path format: `${rootDir}/${docName}/${assetFileName}`.
 func (fs *FileStore) assetFilePath(as *types.EmbeddedAsset) string {
 	fileName := filepath.Base(as.URLPath)
 	return filepath.Join(fs.rootDir, fs.docName, fileName)
-}
-
-// SanitizeFileName helper function to replaces dangerous characters in
-// a string so the return value can be used as a safe file name.
-func SanitizeFileName(fileName string) string {
-	ext := filepath.Ext(fileName)
-	cleanExt := sanitize.BaseName(ext)
-	if cleanExt == "" {
-		cleanExt = ".unknown"
-	}
-
-	return strings.Replace(fmt.Sprintf(
-		"%s.%s",
-		sanitize.BaseName(fileName[:len(fileName)-len(ext)]),
-		cleanExt[1:],
-	), "-", "_", -1)
 }
