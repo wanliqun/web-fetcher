@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -113,7 +114,16 @@ func (f *Fetcher) scrape(strURL string) error {
 		return result.Err
 	}
 
-	result.Metadata, err = f.process(result.Response)
+	// Create file store.
+	urlBaseName := constructURLBaseName(urlObj)
+	fileStore, err := store.NewFileStore(os.Getenv("ROOT_STORE_DIR"), urlBaseName)
+	if err != nil {
+		result.Err = errors.WithMessage(err, "failed to new file store")
+		return result.Err
+	}
+
+	// Process response body.
+	result.Metadata, err = f.process(fileStore, result.Response)
 	if err != nil {
 		result.Err = errors.WithMessage(err, "failed to process HTML response")
 		return result.Err
@@ -122,9 +132,9 @@ func (f *Fetcher) scrape(strURL string) error {
 	return nil
 }
 
-func (f *Fetcher) process(resp *http.Response) (*types.Metadata, error) {
-	if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "html") {
-		return nil, errors.New("response content type is not HTML")
+func (f *Fetcher) process(fileStore *store.FileStore, resp *http.Response) (*types.Metadata, error) {
+	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(strings.ToLower(contentType), "html") {
+		return nil, errors.Errorf("response content type expected HTML got %s", contentType)
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -136,19 +146,13 @@ func (f *Fetcher) process(resp *http.Response) (*types.Metadata, error) {
 		return nil, errors.WithMessage(err, "failed to new DOM parser")
 	}
 
-	// Prepare file store.
-	urlBaseName := constructURLBaseName(resp.Request.URL)
-	fileStore, err := store.NewFileStore(urlBaseName)
-	if err != nil {
-		return nil, errors.WithMessage(err, "failed to new file store")
-	}
-
 	// Extract and merge metadata.
 	oldMetadata, err := fileStore.LoadMetadata()
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to load metadata")
 	}
 
+	// Merge old metadata.
 	metadata := domParser.ExtractMetadata()
 	metadata.FetchedAt = time.Now()
 	if oldMetadata != nil {

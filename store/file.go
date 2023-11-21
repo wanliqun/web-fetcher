@@ -34,9 +34,13 @@ type FileStore struct {
 	docName string
 }
 
-func NewFileStore(docName string) (*FileStore, error) {
+func NewFileStore(rootDir, docName string) (*FileStore, error) {
+	if len(rootDir) == 0 {
+		rootDir = defaultFileStoreRootDir
+	}
+
 	return &FileStore{
-		rootDir: defaultFileStoreRootDir,
+		rootDir: rootDir,
 		docName: sanitize.BaseName(docName),
 	}, nil
 }

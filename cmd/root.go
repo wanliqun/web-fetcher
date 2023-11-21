@@ -55,12 +55,14 @@ func run(cmd *cobra.Command, args []string) {
 		}
 
 		if printMetadata && result.Metadata != nil {
-			logger.WithFields(logrus.Fields{
+			logger = logger.WithFields(logrus.Fields{
 				"numLinks":      result.Metadata.NumLinks,
 				"images":        result.Metadata.NumImages,
 				"lastFetchedAt": result.Metadata.LastFetchedAt,
-			}).Info("Web page fetched")
+			})
 		}
+
+		logger.Info("Web page fetched")
 	})
 
 	urlset := make(map[string]struct{})
