@@ -1,10 +1,12 @@
 package parser
 
 import (
+	"io"
 	"slices"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/pkg/errors"
 	"github.com/wanliqun/web-fetcher/types"
 )
 
@@ -17,6 +19,15 @@ var (
 type Parser struct {
 	// Represents the parsed jQuery like HTML document.
 	Document *goquery.Document
+}
+
+func NewParser(dataReader io.Reader) (*Parser, error) {
+	doc, err := goquery.NewDocumentFromReader(dataReader)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to create goquery document")
+	}
+
+	return &Parser{Document: doc}, nil
 }
 
 // ExtractMetadata extracts metadata from the document.

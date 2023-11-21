@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/wanliqun/web-fetcher/parser"
 )
@@ -31,15 +30,10 @@ const testHTMLString = `
 
 var parserT *parser.Parser
 
-func setup() error {
+func setup() (err error) {
 	reader := strings.NewReader(testHTMLString)
-	doc, err := goquery.NewDocumentFromReader(reader)
-	if err != nil {
-		return err
-	}
-
-	parserT = &parser.Parser{Document: doc}
-	return nil
+	parserT, err = parser.NewParser(reader)
+	return err
 }
 
 func TestMain(m *testing.M) {
