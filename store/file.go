@@ -2,11 +2,15 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/kennygrant/sanitize"
 	"github.com/pkg/errors"
 	"github.com/wanliqun/web-fetcher/types"
 )
@@ -20,11 +24,21 @@ type FileStore struct {
 	docName string
 }
 
-func NewFileStore(rootDir, docName string) *FileStore {
+func NewFileStore(docURL *url.URL) (*FileStore, error) {
+	rootDir, err := os.Getwd()
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to get current directory")
+	}
+
+	docName := docURL.Host + docURL.Path
+	if len(docURL.RawQuery) > 0 {
+		docName += "?" + docURL.RawQuery
+	}
+
 	return &FileStore{
 		rootDir: rootDir,
-		docName: docName,
-	}
+		docName: SanitizeFileName(docName),
+	}, nil
 }
 
 // SaveHTMLDoc saves HTML document object.
@@ -53,7 +67,7 @@ func (fs *FileStore) SaveMetadata(metadata *types.Metadata) error {
 }
 
 // LoadMetadata loads metadata from json file.
-func (fs *FileStore) LoadMetadata(docName string) (*types.Metadata, error) {
+func (fs *FileStore) LoadMetadata() (*types.Metadata, error) {
 	data, err := os.ReadFile(fs.metadataFilePath())
 	if err != nil {
 		if os.IsNotExist(err) { // file not found
@@ -95,4 +109,20 @@ func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {
 func (fs *FileStore) assetFilePath(as *types.EmbeddedAsset) string {
 	fileName := filepath.Base(as.URLPath)
 	return filepath.Join(fs.rootDir, fs.docName, fileName)
+}
+
+// SanitizeFileName helper function to replaces dangerous characters in
+// a string so the return value can be used as a safe file name.
+func SanitizeFileName(fileName string) string {
+	ext := filepath.Ext(fileName)
+	cleanExt := sanitize.BaseName(ext)
+	if cleanExt == "" {
+		cleanExt = ".unknown"
+	}
+
+	return strings.Replace(fmt.Sprintf(
+		"%s.%s",
+		sanitize.BaseName(fileName[:len(fileName)-len(ext)]),
+		cleanExt[1:],
+	), "-", "_", -1)
 }

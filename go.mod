@@ -4,6 +4,7 @@ go 1.21.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.8.1
+	github.com/kennygrant/sanitize v1.2.4
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
 )
