@@ -3,6 +3,7 @@ package fetcher
 import (
 	"context"
 	"net/http"
+	"time"
 )
 
 // ThrottleClient is a throttled HTTP client that limits the number of concurrent requests to
@@ -12,14 +13,16 @@ type ThrottleClient struct {
 	// Default 0 with unlimited concurrencies.
 	Parallelism int
 
-	client http.Client
+	client *http.Client
 	ch     chan struct{}
 }
 
-func NewThrottleClient(parallelism int, client http.Client) *ThrottleClient {
+func NewThrottleClient(parallelism int) *ThrottleClient {
 	c := &ThrottleClient{
 		Parallelism: parallelism,
-		client:      client,
+		client: &http.Client{
+			Timeout: 15 * time.Second,
+		},
 	}
 
 	if parallelism > 0 {
