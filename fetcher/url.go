@@ -8,7 +8,11 @@ import (
 
 // constructURLBaseName creates the base file name from a URL.
 func constructURLBaseName(docURL *url.URL) string {
-	docName := docURL.Host + docURL.Path
+	docName := docURL.Host
+	if len(docURL.Path) > 1 { // Skip path `/` only
+		docName += docURL.Path
+	}
+
 	// Incorporate the query parameters to generate a unique file name,
 	// as distinct query parameters can represent different web pages.
 	if len(docURL.RawQuery) > 0 {

@@ -54,11 +54,11 @@ func (fs *FileStore) SaveDoc(doc *goquery.Document) error {
 		return errors.WithMessage(err, "invalid HTML document")
 	}
 
-	return os.WriteFile(fs.AbsoluteHtmlDocPath(), []byte(content), 0644)
+	return os.WriteFile(fs.HtmlDocPath(), []byte(content), 0644)
 }
 
 // Abosulte HTML document file format: `${rootDir}/${docName}.html`.
-func (fs *FileStore) AbsoluteHtmlDocPath() string {
+func (fs *FileStore) HtmlDocPath() string {
 	return filepath.Join(fs.rootDir, fs.docName+".html")
 }
 
@@ -69,12 +69,12 @@ func (fs *FileStore) SaveMetadata(metadata *types.Metadata) error {
 		return errors.WithMessage(err, "JSON marshal error")
 	}
 
-	return os.WriteFile(fs.AbsoluteMetadataFilePath(), []byte(content), 0644)
+	return os.WriteFile(fs.MetadataFilePath(), []byte(content), 0644)
 }
 
 // LoadMetadata loads metadata from json file.
 func (fs *FileStore) LoadMetadata() (*types.Metadata, error) {
-	data, err := os.ReadFile(fs.AbsoluteMetadataFilePath())
+	data, err := os.ReadFile(fs.MetadataFilePath())
 	if os.IsNotExist(err) { // file not found
 		return nil, nil
 	}
@@ -92,13 +92,13 @@ func (fs *FileStore) LoadMetadata() (*types.Metadata, error) {
 }
 
 // Metadata file path format: `${rootDir}/${docName}.json`
-func (fs *FileStore) AbsoluteMetadataFilePath() string {
+func (fs *FileStore) MetadataFilePath() string {
 	return filepath.Join(fs.rootDir, fs.docName+".json")
 }
 
 // SaveAsset saves embedded asset files.
 func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {
-	assetFilePath := fs.RelativeAssetFilePath(as)
+	assetFilePath := fs.AssetFilePath(as)
 	if err := os.MkdirAll(filepath.Dir(assetFilePath), 0755); err != nil {
 		return errors.WithMessage(err, "failed to create directory")
 	}
@@ -118,7 +118,7 @@ func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {
 
 // Absolute asset file path format:
 // `${rootDir}/${docName}/${assetFilePath}/${assetFileName}`.
-func (fs *FileStore) AbsoluteAssetFilePath(as *types.EmbeddedAsset) string {
+func (fs *FileStore) AssetFilePath(as *types.EmbeddedAsset) string {
 	return filepath.Join(fs.rootDir, fs.RelativeAssetFilePath(as))
 }
 

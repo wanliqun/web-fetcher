@@ -129,7 +129,8 @@ func (f *Fetcher) scrape(strURL string) error {
 	}
 
 	// Create file store.
-	urlBaseName := constructURLBaseName(urlObj)
+	urlBaseName := constructURLBaseName(result.Response.Request.URL)
+
 	fileStore, err := store.NewFileStore(os.Getenv("ROOT_STORE_DIR"), urlBaseName)
 	if err != nil {
 		result.Err = errors.WithMessage(err, "failed to new file store")
@@ -137,7 +138,7 @@ func (f *Fetcher) scrape(strURL string) error {
 	}
 
 	// Process response body.
-	result.Metadata, err = f.process(urlObj, fileStore, result.Response)
+	result.Metadata, err = f.process(fileStore, result.Response)
 	if err != nil {
 		result.Err = errors.WithMessage(err, "failed to process HTML response")
 		return result.Err
@@ -146,9 +147,7 @@ func (f *Fetcher) scrape(strURL string) error {
 	return nil
 }
 
-func (f *Fetcher) process(
-	urlObj *url.URL, fs *store.FileStore, resp *http.Response) (*types.Metadata, error) {
-
+func (f *Fetcher) process(fs *store.FileStore, resp *http.Response) (*types.Metadata, error) {
 	// Parse `Content-Type` from header.
 	contentType := resp.Header.Get("Content-Type")
 	if !strings.Contains(strings.ToLower(contentType), "html") {
@@ -175,7 +174,7 @@ func (f *Fetcher) process(
 	// Process mirror downloading.
 	if f.Mirror {
 		var assets []*types.EmbeddedAsset
-		baseUrlObj := determineBaseURL(urlObj, domParser)
+		baseUrlObj := determineBaseURL(resp.Request.URL, domParser)
 
 		domParser.ReplaceAssets(func(assetURL string) (string, bool) {
 			// Filter invalid asset URL
@@ -188,14 +187,18 @@ func (f *Fetcher) process(
 			// to be relevant and accessible. For the assets with external domain hosts, we should be more
 			// careful and selective, as they may be irrelevant, inaccessible, or restricted by CORS.
 			assetAbsUrlObj := baseUrlObj.ResolveReference(assetUrlObj)
-			if !strings.EqualFold(assetAbsUrlObj.Host, urlObj.Host) {
+			if !strings.EqualFold(assetAbsUrlObj.Host, resp.Request.URL.Host) {
 				return "", false
 			}
 
 			as := &types.EmbeddedAsset{AbsURL: assetAbsUrlObj}
 			assets = append(assets, as)
 
-			return fs.RelativeAssetFilePath(as), true
+			asFileURL := url.URL{
+				Scheme: "file",
+				Path:   fs.AssetFilePath(as),
+			}
+			return asFileURL.String(), true
 		})
 
 		if err := f.processAssets(assets, fs); err != nil {
