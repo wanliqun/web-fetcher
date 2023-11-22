@@ -21,6 +21,9 @@ import (
 type FetcherConfig struct {
 	// Async turns on asynchronous HTTP requesting.
 	Async bool
+	// Mirror downloads asset resources (such as images, CSS, and JavaScript)
+	// within the HTML page to a local folder.
+	Mirror bool
 	// Further configurations such as HTTP configurations eg., user agent, proxy,
 	// and timeout may be considered in future enhancements.
 }
@@ -59,6 +62,17 @@ func Async(a ...bool) FetcherOption {
 			f.Async = a[0]
 		} else {
 			f.Async = true
+		}
+	}
+}
+
+// Mirror turns on mirror downloading.
+func Mirror(a ...bool) FetcherOption {
+	return func(f *Fetcher) {
+		if len(a) > 0 {
+			f.Mirror = a[0]
+		} else {
+			f.Mirror = true
 		}
 	}
 }
@@ -123,7 +137,7 @@ func (f *Fetcher) scrape(strURL string) error {
 	}
 
 	// Process response body.
-	result.Metadata, err = f.process(fileStore, result.Response)
+	result.Metadata, err = f.process(urlObj, fileStore, result.Response)
 	if err != nil {
 		result.Err = errors.WithMessage(err, "failed to process HTML response")
 		return result.Err
@@ -132,9 +146,15 @@ func (f *Fetcher) scrape(strURL string) error {
 	return nil
 }
 
-func (f *Fetcher) process(fileStore *store.FileStore, resp *http.Response) (*types.Metadata, error) {
-	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(strings.ToLower(contentType), "html") {
-		return nil, errors.Errorf("response content type expected HTML got %s", contentType)
+func (f *Fetcher) process(
+	urlObj *url.URL, fs *store.FileStore, resp *http.Response) (*types.Metadata, error) {
+
+	// Parse `Content-Type` from header.
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contentType), "html") {
+		return nil, errors.Errorf(
+			"response content type expected HTML got %s", contentType,
+		)
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -146,27 +166,93 @@ func (f *Fetcher) process(fileStore *store.FileStore, resp *http.Response) (*typ
 		return nil, errors.WithMessage(err, "failed to new DOM parser")
 	}
 
+	// Process metadata.
+	metadata, err := f.processMetadata(fs, domParser)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to process metadata")
+	}
+
+	// Process mirror downloading.
+	if f.Mirror {
+		var assets []*types.EmbeddedAsset
+		baseUrlObj := determineBaseURL(urlObj, domParser)
+
+		domParser.ReplaceAssets(func(assetURL string) (string, bool) {
+			// Filter invalid asset URL
+			assetUrlObj, err := url.Parse(assetURL)
+			if err != nil {
+				return "", false
+			}
+
+			// We only download the assets with the same domain host as the page, as they are more likely
+			// to be relevant and accessible. For the assets with external domain hosts, we should be more
+			// careful and selective, as they may be irrelevant, inaccessible, or restricted by CORS.
+			assetAbsUrlObj := baseUrlObj.ResolveReference(assetUrlObj)
+			if !strings.EqualFold(assetAbsUrlObj.Host, urlObj.Host) {
+				return "", false
+			}
+
+			as := &types.EmbeddedAsset{AbsURL: assetAbsUrlObj}
+			assets = append(assets, as)
+
+			return fs.RelativeAssetFilePath(as), true
+		})
+
+		if err := f.processAssets(assets, fs); err != nil {
+			return nil, errors.WithMessage(err, "failed to process assets")
+		}
+	}
+
+	// Save HTML doc file.
+	if err := fs.SaveDoc(domParser.Document); err != nil {
+		return nil, errors.WithMessage(err, "failed to save HTML document")
+	}
+
+	return metadata, nil
+}
+
+func (f *Fetcher) processAssets(assets []*types.EmbeddedAsset, fs *store.FileStore) error {
+	for _, as := range assets {
+		// Download the asset
+		req, err := http.NewRequest(http.MethodGet, as.AbsURL.String(), nil)
+		if err != nil {
+			return errors.WithMessage(err, "failed to create HTTP request")
+		}
+
+		resp, err := f.client.Do(context.Background(), req)
+		if err != nil {
+			return errors.WithMessage(err, "failed to do HTTP request")
+		}
+		defer resp.Body.Close()
+
+		as.DataReader = resp.Body
+		if err := fs.SaveAsset(as); err != nil {
+			return errors.WithMessage(err, "failed to save asset")
+		}
+	}
+
+	return nil
+}
+
+func (f *Fetcher) processMetadata(
+	fs *store.FileStore, parser *parser.Parser) (*types.Metadata, error) {
+
 	// Extract and merge metadata.
-	oldMetadata, err := fileStore.LoadMetadata()
+	oldMetadata, err := fs.LoadMetadata()
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to load metadata")
 	}
 
 	// Merge old metadata.
-	metadata := domParser.ExtractMetadata()
+	metadata := parser.ExtractMetadata()
 	metadata.FetchedAt = time.Now()
 	if oldMetadata != nil {
 		metadata.LastFetchedAt = &oldMetadata.FetchedAt
 	}
 
 	// Save metadata file.
-	if err := fileStore.SaveMetadata(metadata); err != nil {
+	if err := fs.SaveMetadata(metadata); err != nil {
 		return nil, errors.WithMessage(err, "failed to save metadata file")
-	}
-
-	// Save HTML doc file
-	if err := fileStore.SaveDoc(domParser.Document); err != nil {
-		return nil, errors.WithMessage(err, "failed to save HTML document")
 	}
 
 	return metadata, nil
@@ -186,16 +272,4 @@ func (f *Fetcher) handleOnFetched(result *types.FetchResult) {
 	for _, cb := range f.callbacks {
 		cb(result)
 	}
-}
-
-// constructURLBaseName creates the base file name from a URL.
-func constructURLBaseName(docURL *url.URL) string {
-	docName := docURL.Host + docURL.Path
-	// Incorporate the query parameters to generate a unique file name,
-	// as distinct query parameters can represent different web pages.
-	if len(docURL.RawQuery) > 0 {
-		docName += "+" + docURL.RawQuery
-	}
-
-	return docName
 }

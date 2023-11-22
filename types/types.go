@@ -3,6 +3,7 @@ package types
 import (
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -20,9 +21,9 @@ type Metadata struct {
 
 // EmbeddedAsset represents an embedded asset within an HTML page.
 type EmbeddedAsset struct {
-	// URLPath: The original URL path of the asset.
-	URLPath string
-	// DataReader: The io.ReadCloser interface provides methods to read and close
+	// AbsURL: The absolute URL path of the asset.
+	AbsURL *url.URL
+	// DataReader: The io.ReadCloser interface provides methods to read
 	// the asset's data.
 	DataReader io.Reader
 }

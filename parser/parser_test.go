@@ -54,11 +54,15 @@ func TestExtractMetadata(t *testing.T) {
 
 func TestReplaceURLs(t *testing.T) {
 	expectedNewImageURL := "test.png"
-	parserT.ReplaceURLs(func(originalURL string) string {
-		return expectedNewImageURL
+	parserT.ReplaceAssets(func(originalURL string) (string, bool) {
+		return expectedNewImageURL, true
 	})
 
 	newImgUrl, found := parserT.Document.Find("img").Attr("src")
 	assert.True(t, found, "Failed to find image element")
-	assert.Equal(t, expectedNewImageURL, newImgUrl, "Image URL should be replaced with '%s', but found '%s'", expectedNewImageURL, newImgUrl)
+	assert.Equal(
+		t, expectedNewImageURL, newImgUrl,
+		"Image URL should be replaced with '%s', but found '%s'",
+		expectedNewImageURL, newImgUrl,
+	)
 }

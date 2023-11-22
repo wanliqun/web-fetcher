@@ -2,8 +2,10 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/PuerkitoBio/goquery"
@@ -52,11 +54,11 @@ func (fs *FileStore) SaveDoc(doc *goquery.Document) error {
 		return errors.WithMessage(err, "invalid HTML document")
 	}
 
-	return os.WriteFile(fs.htmlDocPath(), []byte(content), 0644)
+	return os.WriteFile(fs.AbsoluteHtmlDocPath(), []byte(content), 0644)
 }
 
-// HTML document file format: `${rootDir}/${docName}.html`.
-func (fs *FileStore) htmlDocPath() string {
+// Abosulte HTML document file format: `${rootDir}/${docName}.html`.
+func (fs *FileStore) AbsoluteHtmlDocPath() string {
 	return filepath.Join(fs.rootDir, fs.docName+".html")
 }
 
@@ -67,12 +69,12 @@ func (fs *FileStore) SaveMetadata(metadata *types.Metadata) error {
 		return errors.WithMessage(err, "JSON marshal error")
 	}
 
-	return os.WriteFile(fs.metadataFilePath(), []byte(content), 0644)
+	return os.WriteFile(fs.AbsoluteMetadataFilePath(), []byte(content), 0644)
 }
 
 // LoadMetadata loads metadata from json file.
 func (fs *FileStore) LoadMetadata() (*types.Metadata, error) {
-	data, err := os.ReadFile(fs.metadataFilePath())
+	data, err := os.ReadFile(fs.AbsoluteMetadataFilePath())
 	if os.IsNotExist(err) { // file not found
 		return nil, nil
 	}
@@ -90,13 +92,18 @@ func (fs *FileStore) LoadMetadata() (*types.Metadata, error) {
 }
 
 // Metadata file path format: `${rootDir}/${docName}.json`
-func (fs *FileStore) metadataFilePath() string {
+func (fs *FileStore) AbsoluteMetadataFilePath() string {
 	return filepath.Join(fs.rootDir, fs.docName+".json")
 }
 
 // SaveAsset saves embedded asset files.
 func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {
-	file, err := os.Create(fs.assetFilePath(as))
+	assetFilePath := fs.RelativeAssetFilePath(as)
+	if err := os.MkdirAll(filepath.Dir(assetFilePath), 0755); err != nil {
+		return errors.WithMessage(err, "failed to create directory")
+	}
+
+	file, err := os.Create(assetFilePath)
 	if err != nil {
 		return errors.WithMessage(err, "failed to create file")
 	}
@@ -109,8 +116,29 @@ func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {
 	return nil
 }
 
-// Asset file path format: `${rootDir}/${docName}/${assetFileName}`.
-func (fs *FileStore) assetFilePath(as *types.EmbeddedAsset) string {
-	fileName := filepath.Base(as.URLPath)
-	return filepath.Join(fs.rootDir, fs.docName, fileName)
+// Absolute asset file path format:
+// `${rootDir}/${docName}/${assetFilePath}/${assetFileName}`.
+func (fs *FileStore) AbsoluteAssetFilePath(as *types.EmbeddedAsset) string {
+	return filepath.Join(fs.rootDir, fs.RelativeAssetFilePath(as))
+}
+
+// Relative asset file path format:
+// `${docName}/${assetFilePath}/${assetFileName}`.
+func (fs *FileStore) RelativeAssetFilePath(as *types.EmbeddedAsset) string {
+	paths := []string{fs.docName}
+
+	dir, file := path.Split(as.AbsURL.Path)
+	if len(dir) > 0 {
+		paths = append(paths, dir)
+	}
+
+	if len(as.AbsURL.RawQuery) > 0 {
+		file = fmt.Sprintf("%v_%v", as.AbsURL.RawQuery, file)
+	}
+
+	if len(file) > 0 {
+		paths = append(paths, sanitize.Name(file))
+	}
+
+	return filepath.Join(paths...)
 }

@@ -2,8 +2,6 @@ package parser
 
 import (
 	"io"
-	"slices"
-	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/pkg/errors"
@@ -11,8 +9,7 @@ import (
 )
 
 var (
-	urlAttributeKeys      = []string{"src", "href", "data"}
-	urlAttributeSelectors = "[src], [href], [data]"
+	assetUrlAttrSelectors = "img[src], link[rel=stylesheet], script[src]"
 )
 
 // Parser parses an HTML response body to extract metadata or update selectors.
@@ -42,17 +39,31 @@ func (p *Parser) ExtractMetadata() *types.Metadata {
 }
 
 // URLTransformer is a function type that transforms URLs.
-type URLTransformer func(string) string
+type URLTransformer func(string) (string, bool)
 
-// ReplaceURLs replaces URLs within the HTML document using the provided
-// transformation function.
-func (p *Parser) ReplaceURLs(transformer URLTransformer) {
+// ReplaceAssets replaces assets within the HTML document using the provided transformation
+// function. These assets that are linked or embedded in the document, such as images, CSS files,
+// JavaScript files, fonts, etc., are essential for rendering the web page correctly and
+// providing the desired functionality and appearance.
+func (p *Parser) ReplaceAssets(transformer URLTransformer) {
 	// Find all the elements that have an attribute with a URL value
-	p.Document.Find(urlAttributeSelectors).Each(func(i int, s *goquery.Selection) {
-		for _, a := range s.Nodes[0].Attr {
-			if slices.Contains(urlAttributeKeys, strings.ToLower(a.Key)) {
-				s.SetAttr(a.Key, transformer(a.Val))
-			}
+	p.Document.Find(assetUrlAttrSelectors).Each(func(i int, s *goquery.Selection) {
+		var urlAttrKey string
+		switch {
+		case s.Is("img"), s.Is("script"):
+			urlAttrKey = "src"
+		case s.Is("link"):
+			urlAttrKey = "href"
+		}
+
+		assetURL, ok := s.Attr(urlAttrKey)
+		if !ok || len(assetURL) == 0 {
+			return
+		}
+
+		if newAssetURL, ok := transformer(assetURL); ok {
+			// Replace selection URL
+			s.SetAttr(urlAttrKey, newAssetURL)
 		}
 	})
 }
