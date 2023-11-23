@@ -15,9 +15,10 @@ var (
 	// Used for flags.
 	printMetadata bool
 	mirror        bool
+	verbose       bool
 
 	rootCmd = &cobra.Command{
-		Use:   "./fetch [--metadata | -a] [--mirror | -m] <URL> [URL2] ...",
+		Use:   "./fetch [--metadata | -a] [--mirror | -m] [--verbose | -v] <URL> [URL2] ...",
 		Short: "CLI tool for web page scraping.",
 		Args:  cobra.MinimumNArgs(1),
 		Run:   run,
@@ -34,6 +35,10 @@ func init() {
 		&mirror, "mirror", "m", false,
 		"Download web page assets for local mirror",
 	)
+
+	rootCmd.Flags().BoolVarP(
+		&verbose, "verbose", "v", false, "Verbose output",
+	)
 }
 
 func Execute() {
@@ -44,6 +49,12 @@ func Execute() {
 }
 
 func run(cmd *cobra.Command, args []string) {
+	if verbose {
+		logrus.SetLevel(logrus.DebugLevel)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
 	options := []fetcher.FetcherOption{fetcher.Async()}
 	if mirror {
 		options = append(options, fetcher.Mirror())

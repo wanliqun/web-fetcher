@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/wanliqun/web-fetcher/parser"
 	"github.com/wanliqun/web-fetcher/store"
 	"github.com/wanliqun/web-fetcher/types"
@@ -188,6 +189,10 @@ func (f *Fetcher) process(fs *store.FileStore, resp *http.Response) (*types.Meta
 			// careful and selective, as they may be irrelevant, inaccessible, or restricted by CORS.
 			assetAbsUrlObj := baseUrlObj.ResolveReference(assetUrlObj)
 			if !strings.EqualFold(assetAbsUrlObj.Host, resp.Request.URL.Host) {
+				logrus.WithFields(logrus.Fields{
+					"assetURLHost": assetAbsUrlObj.Host,
+					"pageURLHost":  resp.Request.URL.Host,
+				}).Debug("Asset skipped due to not of the same domain host.")
 				return "", false
 			}
 
@@ -227,6 +232,8 @@ func (f *Fetcher) processAssets(assets []*types.EmbeddedAsset, fs *store.FileSto
 			return errors.WithMessage(err, "failed to do HTTP request")
 		}
 		defer resp.Body.Close()
+
+		logrus.WithField("URL", as.AbsURL.String()).Debug("Asset downloaded.")
 
 		as.DataReader = resp.Body
 		if err := fs.SaveAsset(as); err != nil {
