@@ -31,12 +31,6 @@ for arg in "$@"; do
   fi
 done
 
-# check if there are any urls after the optional flag
-if [ -z "$args" ]; then
-  echo "No urls provided"
-  exit 1
-fi
-
 if $buildDockerImage;  then
     # Build the Docker image
     docker build -t web-fetcher .
@@ -46,6 +40,12 @@ if $buildDockerImage;  then
         echo "Failed to build the docker image"
         exit 1
     fi
+fi
+
+# check if there are any urls after the optional flag
+if [ -z "$args" ]; then
+  echo "No urls provided"
+  exit 1
 fi
 
 # Run the Docker container with the specified arguments
