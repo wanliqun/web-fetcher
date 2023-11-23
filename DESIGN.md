@@ -26,12 +26,12 @@ Develop a command-line tool that fetches web pages and stores them (along with t
 ### Main Components and Responsibilities
 
 1.  Fetcher: Responsible for scraping HTML pages and downloading embedded assets for specified URLs.
-2.  Parser: Parses HTML responses to extract metadata, identify embedded assets, and modify local URLs accordingly.
+2.  Parser: Parses HTML responses to extract metadata and modify downloaded asset URLs accordingly.
 3.  Store: Manages the persistence of HTML, assets, and metadata files on disk.
 
 ## Detail Design
 
-### PageFetcher
+### Fetcher
 ```go
 // Fetcher provides scraper instances for fetching web pages.
 type Fetcher struct {
@@ -46,8 +46,10 @@ func (f *Fetcher) Fetch(url string) error {...}
 
 // FetchedCallback is a type alias for the callback function executed upon
 // task completion.
-type FetchedCallback func(result *FetchResult, err error)
+type FetchedCallback func(result *types.FetchResult)
+
 // OnFetched registers a callback function to be invoked after each task finishes.
+// NB this function is not thread safe.
 func (f *Fetcher) OnFetched(cb FetchedCallback) {...}
 ```
 ### Parser
@@ -62,10 +64,13 @@ type Parser struct {
 func (p *Parser) ExtractMetadata() (*Metadata, error) {...}
 
 // URLTransformer is a function type that transforms URLs.
-type URLTransformer func(string) string
-// ReplaceURLs replaces URLs within the HTML document using the provided 
-// transformation function.
-func (p *Parser) ReplaceURLs(t URLTransformer) error {...}
+type URLTransformer func(string) (string, bool)
+
+// ReplaceAssets replaces assets within the HTML document using the provided transformation
+// function. These assets that are linked or embedded in the document, such as images, CSS files,
+// JavaScript files, fonts, etc., are essential for rendering the web page correctly and
+// providing the desired functionality and appearance.
+func (p *Parser) ReplaceAssets(transformer URLTransformer) {...}
 ```
 ### FileStore
 ```go
@@ -78,46 +83,50 @@ type FileStore struct {
 	docName string
 }
 
-// SaveHTMLDoc saves HTML document object.
-func (fs *FileStore) SaveHTMLDoc(doc *goquery.Document) error {...}
+// SaveDoc saves HTML document object.
+func (fs *FileStore) SaveDoc(doc *goquery.Document) error {...}
 
-// SaveMetadata saves parsed metadata.  
-func (fs *FileStore) SaveMetadata(meta *Metadata) error {...}
+// SaveMetadata saves the parsed metadata.
+func (fs *FileStore) SaveMetadata(metadata *types.Metadata) error {...}
 
 // LoadMetadata loads metadata from json file.
-func (fs *FileStore) LoadMetadata(docName string) (*types.Metadata, error) {...}
+func (fs *FileStore) LoadMetadata() (*types.Metadata, error)
 
-// SaveAsset saves embeded asset file.
-func (fs *FileStore) SaveAsset(as *EmbeddedAsset) error {...}
+// SaveAsset saves embedded asset files.
+func (fs *FileStore) SaveAsset(as *types.EmbeddedAsset) error {...}
 ```
 ### Auxillary Types
 ```go
+// Metadata describes the structure and information of an HTML page.
+type Metadata struct {
+	// NumLinks: The total number of links found within the HTML page.
+	NumLinks int
+	// NumImages: The total number of images found within the HTML page.
+	NumImages int
+	// LastFetchedAt: The last time the HTML page was fetched.
+	LastFetchedAt *time.Time
+	// FetchedAt: The current time the HTML page was fetched.
+	FetchedAt time.Time
+}
+
 // EmbeddedAsset represents an embedded asset within an HTML page.
 type EmbeddedAsset struct {
-    // URLPath: The original URL path of the asset.
-    URLPath string
-    // DataReader: The io.ReadCloser interface provides methods to read and close 
-    // the asset's data.
-    DataReader io.ReadCloser
+	// AbsURL: The absolute URL path of the asset.
+	AbsURL *url.URL
+	// DataReader: The io.ReadCloser interface provides methods to read
+	// the asset's data.
+	DataReader io.Reader
 }
 
 // FetchResult represents the outcome of fetching an HTML page.
 type FetchResult struct {
-    // Metadata extracted from the HTML page.
-    Metadata *Metadata
-    // HTTP response received from the fetch request.
-    Response *http.Response
-}
-
-// Metadata describes the structure and information of an HTML page.
-type Metadata struct {
-    // NumLinks: The total number of links found within the HTML page.
-    NumLinks int
-    // NumImages: The total number of images found within the HTML page.
-    NumImages int
-    // LastFetchedAt: The last time the HTML page was fetched.
-    LastFetchedAt *time.Time
-    // FetchedAt: The current time the HTML page was fetched.
-    FetchedAt *time.Time
+	// Web page URL
+	URL string
+	// Metadata extracted from the HTML page.
+	Metadata *Metadata
+	// HTTP response received from the fetch request.
+	Response *http.Response
+	// Fetch error if any.
+	Err error
 }
 ```
